@@ -51,7 +51,7 @@ def main(pcd_dir, poses_path):
     global_pcd = transform_point_clouds(pcd_dir, poses)
 
     # Save the global point cloud
-    output_path = "global_point_cloud.ply"
+    output_path = "./global_point_clouds/global_point_cloud_feb6_janne.ply"
     o3d.io.write_point_cloud(output_path, global_pcd)
     print(f"Global point cloud saved to {output_path}")
 
