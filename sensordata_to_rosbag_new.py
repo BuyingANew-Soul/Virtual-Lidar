@@ -33,7 +33,7 @@ def linear_interpolate(target_time, time1, time2, value1, value2):
     return value1 + ratio * (value2 - value1)
 
 # ✅ Process GPS Data in Chunks
-def write_gps_data(file_path, bag, lidar_times, topic="/gps"):
+def write_gps_data(file_path, bag, topic="/gps"):
     gps_chunks = load_large_csv(file_path)
     if gps_chunks is None:
         return
@@ -42,23 +42,23 @@ def write_gps_data(file_path, bag, lidar_times, topic="/gps"):
     for chunk in gps_chunks:
         gps_data.append(chunk.values)
     gps_data = np.vstack(gps_data)  # Convert list of chunks to numpy array
-    gps_times = gps_data[:, 0]  # First column is timestamp
+    gps_times = gps_data[:, 0]  # First column is timestamp (already in seconds)
 
-    for lidar_time in lidar_times:
-        nearest_gps_time, gps_index = find_nearest_time(lidar_time, gps_times)
-        gps_entry = gps_data[gps_index]
+    print(f"📂 Writing {len(gps_times)} GPS messages at full rate")
 
+    for gps_entry in tqdm(gps_data, desc="Processing GPS Data", mininterval=1.0):
         fix = NavSatFix()
-        fix.header.stamp = rospy.Time.from_sec(lidar_time)
+        fix.header.stamp = rospy.Time.from_sec(gps_entry[0])  # Use actual GPS timestamp
         fix.latitude = gps_entry[3]
         fix.longitude = gps_entry[4]
         fix.altitude = gps_entry[5]
         bag.write(topic, fix, t=fix.header.stamp)
 
-    print("✅ GPS data synchronized with LiDAR!")
+    print("✅ GPS data written at full rate!")
+
 
 # ✅ Process IMU Data in Chunks
-def write_imu_data(file_path, bag, lidar_times, topic="/imu"):
+def write_imu_data(file_path, bag, topic="/imu/data"):
     imu_chunks = load_large_csv(file_path)
     if imu_chunks is None:
         return
@@ -69,12 +69,11 @@ def write_imu_data(file_path, bag, lidar_times, topic="/imu"):
     imu_data = np.vstack(imu_data)  # Convert list of chunks to numpy array
     imu_times = imu_data[:, 0]  # First column is timestamp (already in seconds)
 
-    for lidar_time in lidar_times:
-        nearest_imu_time, imu_index = find_nearest_time(lidar_time, imu_times)
-        imu_entry = imu_data[imu_index]
+    print(f"📂 Writing {len(imu_times)} IMU messages at full rate")
 
+    for imu_entry in tqdm(imu_data, desc="Processing IMU Data", mininterval=1.0):
         imu = Imu()
-        imu.header.stamp = rospy.Time.from_sec(lidar_time)
+        imu.header.stamp = rospy.Time.from_sec(imu_entry[0])  # Use actual IMU timestamp
         imu.linear_acceleration.x = imu_entry[1]
         imu.linear_acceleration.y = imu_entry[2]
         imu.linear_acceleration.z = imu_entry[3]
@@ -83,7 +82,8 @@ def write_imu_data(file_path, bag, lidar_times, topic="/imu"):
         imu.angular_velocity.z = imu_entry[6]
         bag.write(topic, imu, t=imu.header.stamp)
 
-    print("✅ IMU data synchronized with LiDAR!")
+    print("✅ IMU data written at full rate!")
+
 
 
 
@@ -159,12 +159,13 @@ def main():
                                    os.path.join(input_dir, "velodyne_hits.bin"), 
                                    bag)
 
-    # ✅ Process GPS and IMU data using LiDAR timestamps
-    write_gps_data(os.path.join(input_dir, "gps.csv"), bag, lidar_times)
-    write_imu_data(os.path.join(input_dir, "ms25.csv"), bag, lidar_times)
+    # ✅ Process GPS and IMU data at full rate (not downsampled!)
+    write_gps_data(os.path.join(input_dir, "gps.csv"), bag)
+    write_imu_data(os.path.join(input_dir, "ms25.csv"), bag)
 
     bag.close()
     print("✅ ROS Bag Successfully Created!")
 
 if __name__ == "__main__":
     sys.exit(main())
+
