@@ -87,8 +87,9 @@ def write_imu_data(file_path, bag, topic="/imu/data"):
 
 
 
+
 def write_lidar_data(pcd_txt, bin_file, bag, topic="/velodyne_points", batch_size=10000):
-    """Efficiently read LiDAR timestamps from `pcd.txt` and point cloud data from `velodyne_hits.bin` and write to ROS bag in batches."""
+    """Reads LiDAR timestamps from `pcd.txt` and point cloud data from `velodyne_hits.bin` and writes them to a ROS bag."""
 
     if not os.path.exists(pcd_txt):
         print(f"⚠️ Warning: {pcd_txt} not found. Skipping...")
@@ -98,32 +99,49 @@ def write_lidar_data(pcd_txt, bin_file, bag, topic="/velodyne_points", batch_siz
         print(f"⚠️ Warning: {bin_file} not found. Skipping...")
         return []
 
-    # Load timestamps from pcd.txt
+    # ✅ Load timestamps from pcd.txt
     pcd_data = pd.read_csv(pcd_txt, delimiter=" ", skiprows=2, header=None, names=["timestamp", "filename"])
     lidar_times = pcd_data["timestamp"].values.astype(float)
 
     print(f"📂 Loading {len(lidar_times)} LiDAR timestamps from {pcd_txt}")
 
-    # Open LiDAR .bin file
+    # ✅ Open LiDAR .bin file
     with open(bin_file, "rb") as f_bin:
         total_points = 0
         for i, lidar_time in enumerate(tqdm(lidar_times, desc="Processing LiDAR Data", mininterval=5.0)):
             timestamp = rospy.Time.from_sec(lidar_time)
             
-            # Read batch of points
+            # ✅ Read batch of points
             batch_points = []
+            point_index = 0  # Used for approximating the ring index
+
             while len(batch_points) < batch_size:
-                block = f_bin.read(12)  # Read 3 floats (x, y, z)
+                block = f_bin.read(16)  # ✅ Read 4 floats (x, y, z, intensity)
                 if not block:
                     break
-                x, y, z = struct.unpack("fff", block)
-                batch_points.append([x, y, z, lidar_time])  # Append with timestamp
+                x, y, z, intensity = struct.unpack("ffff", block)  # ✅ Now includes intensity
+
+                # ✅ Assign LiDAR timestamp & ring ID
+                point_time = lidar_time  # Use frame timestamp
+                ring = int(point_index % 16)  # ✅ Approximate ring index for VLP-16 (0-15)
+
+                batch_points.append((x, y, z, intensity, point_time, ring))
+                point_index += 1
 
             if batch_points:
                 total_points += len(batch_points)
-                batch_points = np.array(batch_points, dtype=np.float32)  # Convert to NumPy array for efficiency
 
-                # Create PointCloud2 message
+                # ✅ Convert to NumPy structured array with proper types
+                batch_points = np.array(batch_points, dtype=[
+                    ("x", np.float32), 
+                    ("y", np.float32), 
+                    ("z", np.float32), 
+                    ("intensity", np.float32),  # ✅ Restore intensity
+                    ("time", np.float32),       # ✅ Ensure time field exists
+                    ("ring", np.uint16)         # ✅ Ensure ring is an integer
+                ])
+
+                # ✅ Create PointCloud2 message
                 header = Header()
                 header.frame_id = "velodyne"
                 header.stamp = timestamp
@@ -132,16 +150,22 @@ def write_lidar_data(pcd_txt, bin_file, bag, topic="/velodyne_points", batch_siz
                     PointField("x", 0, PointField.FLOAT32, 1),
                     PointField("y", 4, PointField.FLOAT32, 1),
                     PointField("z", 8, PointField.FLOAT32, 1),
-                    PointField("time", 12, PointField.FLOAT32, 1),  # Ensure `time` field exists
+                    PointField("intensity", 12, PointField.FLOAT32, 1),  # ✅ Restored intensity
+                    PointField("time", 16, PointField.FLOAT32, 1),       # ✅ Ensure time is included
+                    PointField("ring", 20, PointField.UINT16, 1),       # ✅ Ensure ring is included
                 ]
                 pcl_msg = pcl2.create_cloud(header, fields, batch_points)
                 bag.write(topic, pcl_msg, t=timestamp)
 
-            # Force garbage collection after each batch
+            # ✅ Force garbage collection after each batch
             gc.collect()
 
     print(f"✅ Processed {len(lidar_times)} LiDAR frames, {total_points} total points")
     return lidar_times
+
+
+
+
 
 
 
