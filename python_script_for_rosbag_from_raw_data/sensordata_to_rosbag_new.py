@@ -11,26 +11,12 @@ from sensor_msgs.msg import Imu, NavSatFix, PointCloud2, PointField
 import sensor_msgs.point_cloud2 as pcl2
 from std_msgs.msg import Header
 
-
-
 # ✅ Function to Load Large CSV Files in Chunks (Memory Efficient)
 def load_large_csv(file_path, chunk_size=10000):
     if not os.path.exists(file_path):
         print(f"⚠️ Warning: {file_path} not found. Skipping...")
         return None
     return pd.read_csv(file_path, chunksize=chunk_size)
-
-# ✅ Function to Find Nearest Timestamp in Sorted Arrays
-def find_nearest_time(target_time, time_array):
-    index = np.abs(time_array - target_time).argmin()
-    return time_array[index], index
-
-# ✅ Function to Linearly Interpolate Between Two Timestamps
-def linear_interpolate(target_time, time1, time2, value1, value2):
-    if time1 == time2:
-        return value1  # Avoid division by zero
-    ratio = (target_time - time1) / (time2 - time1)
-    return value1 + ratio * (value2 - value1)
 
 # ✅ Process GPS Data in Chunks
 def write_gps_data(file_path, bag, topic="/gps"):
@@ -42,9 +28,6 @@ def write_gps_data(file_path, bag, topic="/gps"):
     for chunk in gps_chunks:
         gps_data.append(chunk.values)
     gps_data = np.vstack(gps_data)  # Convert list of chunks to numpy array
-    gps_times = gps_data[:, 0]  # First column is timestamp (already in seconds)
-
-    print(f"📂 Writing {len(gps_times)} GPS messages at full rate")
 
     for gps_entry in tqdm(gps_data, desc="Processing GPS Data", mininterval=1.0):
         fix = NavSatFix()
@@ -56,7 +39,6 @@ def write_gps_data(file_path, bag, topic="/gps"):
 
     print("✅ GPS data written at full rate!")
 
-
 # ✅ Process IMU Data in Chunks
 def write_imu_data(file_path, bag, topic="/imu/data"):
     imu_chunks = load_large_csv(file_path)
@@ -67,9 +49,6 @@ def write_imu_data(file_path, bag, topic="/imu/data"):
     for chunk in imu_chunks:
         imu_data.append(chunk.values)
     imu_data = np.vstack(imu_data)  # Convert list of chunks to numpy array
-    imu_times = imu_data[:, 0]  # First column is timestamp (already in seconds)
-
-    print(f"📂 Writing {len(imu_times)} IMU messages at full rate")
 
     for imu_entry in tqdm(imu_data, desc="Processing IMU Data", mininterval=1.0):
         imu = Imu()
@@ -84,12 +63,9 @@ def write_imu_data(file_path, bag, topic="/imu/data"):
 
     print("✅ IMU data written at full rate!")
 
-
-
-
-
+# ✅ Process LiDAR Data (Read BIN and Match Timestamps from pcd.txt)
 def write_lidar_data(pcd_txt, bin_file, bag, topic="/velodyne_points", batch_size=10000):
-    """Reads LiDAR timestamps from `pcd.txt` and point cloud data from `velodyne_hits.bin` and writes them to a ROS bag."""
+    """Reads LiDAR timestamps from `pcd.txt`, associates them with `.bin` data, and writes to ROS bag."""
 
     if not os.path.exists(pcd_txt):
         print(f"⚠️ Warning: {pcd_txt} not found. Skipping...")
@@ -110,23 +86,16 @@ def write_lidar_data(pcd_txt, bin_file, bag, topic="/velodyne_points", batch_siz
         total_points = 0
         for i, lidar_time in enumerate(tqdm(lidar_times, desc="Processing LiDAR Data", mininterval=5.0)):
             timestamp = rospy.Time.from_sec(lidar_time)
-            
+
             # ✅ Read batch of points
             batch_points = []
-            point_index = 0  # Used for approximating the ring index
-
             while len(batch_points) < batch_size:
-                block = f_bin.read(16)  # ✅ Read 4 floats (x, y, z, intensity)
+                block = f_bin.read(14)  # ✅ Read 4 floats (x, y, z, intensity) and 1 ushort (ring)
                 if not block:
                     break
-                x, y, z, intensity = struct.unpack("ffff", block)  # ✅ Now includes intensity
+                x, y, z, intensity, ring = struct.unpack("ffffH", block)  # ✅ Now includes ring
 
-                # ✅ Assign LiDAR timestamp & ring ID
-                point_time = lidar_time  # Use frame timestamp
-                ring = int(point_index % 16)  # ✅ Approximate ring index for VLP-16 (0-15)
-
-                batch_points.append((x, y, z, intensity, point_time, ring))
-                point_index += 1
+                batch_points.append((x, y, z, intensity, lidar_time, ring))  # ✅ Add `time` here!
 
             if batch_points:
                 total_points += len(batch_points)
@@ -136,9 +105,9 @@ def write_lidar_data(pcd_txt, bin_file, bag, topic="/velodyne_points", batch_siz
                     ("x", np.float32), 
                     ("y", np.float32), 
                     ("z", np.float32), 
-                    ("intensity", np.float32),  # ✅ Restore intensity
-                    ("time", np.float32),       # ✅ Ensure time field exists
-                    ("ring", np.uint16)         # ✅ Ensure ring is an integer
+                    ("intensity", np.float32),  
+                    ("time", np.float32),       # ✅ Time field added from pcd.txt
+                    ("ring", np.uint16)         
                 ])
 
                 # ✅ Create PointCloud2 message
@@ -150,9 +119,9 @@ def write_lidar_data(pcd_txt, bin_file, bag, topic="/velodyne_points", batch_siz
                     PointField("x", 0, PointField.FLOAT32, 1),
                     PointField("y", 4, PointField.FLOAT32, 1),
                     PointField("z", 8, PointField.FLOAT32, 1),
-                    PointField("intensity", 12, PointField.FLOAT32, 1),  # ✅ Restored intensity
-                    PointField("time", 16, PointField.FLOAT32, 1),       # ✅ Ensure time is included
-                    PointField("ring", 20, PointField.UINT16, 1),       # ✅ Ensure ring is included
+                    PointField("intensity", 12, PointField.FLOAT32, 1),
+                    PointField("time", 16, PointField.FLOAT32, 1),  
+                    PointField("ring", 20, PointField.UINT16, 1),  
                 ]
                 pcl_msg = pcl2.create_cloud(header, fields, batch_points)
                 bag.write(topic, pcl_msg, t=timestamp)
@@ -163,12 +132,6 @@ def write_lidar_data(pcd_txt, bin_file, bag, topic="/velodyne_points", batch_siz
     print(f"✅ Processed {len(lidar_times)} LiDAR frames, {total_points} total points")
     return lidar_times
 
-
-
-
-
-
-
 def main():
     rospy.init_node("rosbag_creator", anonymous=True)
 
@@ -178,12 +141,10 @@ def main():
     print(f"📂 Creating ROS Bag: {output_bag}")
     bag = rosbag.Bag(output_bag, "w")
 
-    # ✅ Read LiDAR timestamps & point cloud data from .bin
     lidar_times = write_lidar_data(os.path.join(input_dir, "pcd.txt"), 
                                    os.path.join(input_dir, "velodyne_hits.bin"), 
                                    bag)
 
-    # ✅ Process GPS and IMU data at full rate (not downsampled!)
     write_gps_data(os.path.join(input_dir, "gps.csv"), bag)
     write_imu_data(os.path.join(input_dir, "ms25.csv"), bag)
 
@@ -192,4 +153,3 @@ def main():
 
 if __name__ == "__main__":
     sys.exit(main())
-
