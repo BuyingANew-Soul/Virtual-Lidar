@@ -1,10 +1,12 @@
 1. Run the Dockerfile to create a docker image with ros noetic with ubuntu 20.04 
     docker build -t ros-noetic-lego-loam .
 2. Run the lego_loam.sh to create a docker container with volume attached to my rosbag to docker_ws inside the contaianer
-3. Download pcl 1.12.1 https://github.com/PointCloudLibrary/pcl/releases?page=2
-3. Copy the pcl zip file into the docker_ws then moved it to /home/root/pcl directory and unzip
+3. Download pcl 1.12.1 wget https://github.com/PointCloudLibrary/pcl/archive/refs/tags/pcl-1.12.1-rc1.tar.gz
+
+3. Copy the pcl zip file into  /home/root/ directory and unzip (create the directory first)
 4. Install pcl 
-5. Download GTSAM 4.1.1 - download page (https://github.com/borglab/gtsam/releases?page=2)
+5. Download GTSAM 4.1.1 - wget https://github.com/borglab/gtsam/archive/refs/tags/4.1.1.tar.gz
+6: Copy the GTSAM zip file into  /home/root/ directory and unzip (create the directory first)
 6. Install lego_loam
 
 After entering the Container:
@@ -53,8 +55,6 @@ if rviz can not open error occurs:
 
 
 Playing the rosbag
-> rosbag play /home/root/docker_ws/univ_outdoor_spring_2019-04-25-14-40-25.bag --clock \
-    /morri/velodyne/velodyne_points:=/velodyne_points \
-    /mavros/imu/data:=/imu/data
+> rosbag play /home/root/docker_ws/univ_outdoor_spring_2019-04-25-14-40-25.bag --clock /morri/velodyne/velodyne_points:=/velodyne_points /mavros/imu/data:=/imu/data
 
 

@@ -1,12 +1,19 @@
 #!/bin/bash
-mkdir docker_ws
-# Script to run ROS Kinetic with GUI support in Docker
 
-# Allow X server to be accessed from the local machine
+# Create a directory for ROS bag files if it doesn't exist
+mkdir -p docker_ws
+
+# Allow X server to be accessed from the local machine (for GUI applications like Rviz)
 xhost +local:
 
-# Container name
+# Define container name
 CONTAINER_NAME="lego-loam"
+
+# Check if the container already exists
+if [ "$(docker ps -aq -f name=$CONTAINER_NAME)" ]; then
+    echo "Removing existing container: $CONTAINER_NAME"
+    docker rm -f $CONTAINER_NAME
+fi
 
 # Run the Docker container
 docker run -itd \
@@ -25,4 +32,7 @@ docker run -itd \
   -v /tmp/.X11-unix:/tmp/.X11-unix \
   --env="DISPLAY=$DISPLAY" \
   ros-noetic-lego-loam:latest \
-  /bin/bash
+  /bin/bash -c "source /opt/ros/noetic/setup.bash && source ~/catkin_ws/devel/setup.bash && exec bash"
+
+# Attach to the running container
+docker exec -it $CONTAINER_NAME bash
