@@ -57,4 +57,16 @@ if rviz can not open error occurs:
 Playing the rosbag
 > rosbag play /home/root/docker_ws/univ_outdoor_spring_2019-04-25-14-40-25.bag --clock /morri/velodyne/velodyne_points:=/velodyne_points /mavros/imu/data:=/imu/data
 
+Running the lego loam:
+roslaunch lego_loam run.launch
+
+
+docker build -t ros-noetic-lego-loam .
+
+rosrun pcl_ros pointcloud_to_pcd input:=/registered_cloud _prefix:=scan
+
+
+
+RUnning Dockerfile
+docker build -t ros-noetic-lego-loam .
 

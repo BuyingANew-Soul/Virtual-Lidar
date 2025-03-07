@@ -1,0 +1,79 @@
+Creating the docker image:
+(from inside the Dockerfile directory)
+docker build -t ros-noetic-lego-loam .
+
+Creating the docker container:
+./lego_loam.sh 
+
+
+Running the lego loam:
+roslaunch lego_loam run.launch 
+
+
+Playing the rosbag:
+rosbag play /home/root/docker_ws/univ_outdoor_spring_2019-04-25-14-40-25.bag --clock /morri/velodyne/velodyne_points:=/velodyne_points /mavros/imu/data:=/imu/data
+
+
+----------------------------------------------------------------------
+Extract poses:
+1. Check the Published Pose Topics
+
+LeGO-LOAM publishes pose information to these topics:
+
+    /aft_mapped_to_init (geometry_msgs/PoseStamped) → The final optimized pose
+    /integrated_to_init (nav_msgs/Odometry) → Integrated odometry result
+    /odometry (nav_msgs/Odometry) → Initial LiDAR odometry result
+
+You can check the active topics using:
+
+rostopic list
+
+2. Save Pose Data to a File
+
+If you want to save the estimated poses, you can record the necessary topics using rostopic echo or rosbag record.
+Method 1: Using rostopic echo
+
+You can save the output of the pose topic directly to a file:
+
+rostopic echo -b my_rosbag.bag -p /aft_mapped_to_init > poses.csv
+
+This will create a CSV file with pose timestamps, positions, and orientations.
+Method 2: Using rosbag record
+
+To record the pose topics while running LeGO-LOAM:
+
+rosbag record /aft_mapped_to_init /integrated_to_init -O pose_data.bag
+
+Later, you can extract the poses from the bag file.
+3. Extract Poses from a ROS Bag File
+
+If you have already run LeGO-LOAM with a rosbag, you can extract poses from the recorded topics using rosbag play and rostopic echo:
+
+rosbag play my_rosbag.bag
+rostopic echo /aft_mapped_to_init > poses.txt
+
+Alternatively, use Python and rosbag to extract data programmatically.
+4. Using tf for Full Trajectory
+
+If you need the full transformation tree, use:
+
+rosrun tf tf_echo /map /base_link
+
+You can log these transformations for trajectory analysis.
+-----------------------------------------------------
+then run the python script pose_data_transformation.py to have the desired format from the pose.txt file
+desired format: timestamp, x, y, z, qx, qy, qz, qw
+
+------------------------------------------------------------
+
+
+Saving the Global Point Cloud (from registered_cloud):
+roslaunch lego_loam run.launch
+rosbag play /home/root/docker_ws/univ_outdoor_spring_2019-04-25-14-40-25.bag --clock /morri/velodyne/velodyne_points:=/velodyne_points /mavros/imu/data:=/imu/data
+rosrun pcl_ros pointcloud_to_pcd input:=/registered_cloud _prefix:=scan
+
+the last command will save pcd files in the directory where the command is being ran
+
+Merge the pcd file to create a GlobalMap:
+pcl_concatenate_points_pcd scan*.pcd global_map.pcd
+
