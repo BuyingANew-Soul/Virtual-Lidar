@@ -1,0 +1,70 @@
+1. Run the Dockerfile to create a docker image with ros noetic with ubuntu 20.04 
+    docker build -t ros-noetic-lego-loam .
+2. Run the lego_loam.sh to create a docker container with volume attached to my rosbag to docker_ws inside the contaianer
+3. Download pcl 1.12.1 wget https://github.com/PointCloudLibrary/pcl/archive/refs/tags/pcl-1.12.1-rc1.tar.gz
+
+3. Copy the pcl zip file into  /home/root/ directory and unzip (create the directory first)
+4. Install pcl 
+5. Download GTSAM 4.1.1 - wget https://github.com/borglab/gtsam/archive/refs/tags/4.1.1.tar.gz
+6: Copy the GTSAM zip file into  /home/root/ directory and unzip (create the directory first)
+6. Install lego_loam
+
+After entering the Container:
+> source /opt/ros/noetic/setup.bash
+
+catkin workspace creation
+> mkdir ~/catkin_ws/srs
+> cd catkin_ws
+> catking_make
+
+The following library might need to install pcl
+> sudo apt-get install libusb-1.0-0-dev
+
+Installing PCL 1.12.1
+> cd into where the pcl zip is beign extracted
+> mkdir release
+> cd release
+> cmake -DCMAKE_BUILD_TYPE=None -DCMAKE_INSTALL_PREFIX=/usr \ -DBUILD_GPU=ON-DBUILD_apps=ON -DBUILD_examples=ON \ -DCMAKE_INSTALL_PREFIX=/usr ..
+> make 
+> sudo make install
+
+Installing GTSAM
+> cd into gtsam extracted folder
+> mkdir build && cd build
+> cmake ..
+> sudo make install
+
+Installing LEGO loam
+# The original repo was not meant for ubuntu 20.04 
+# Using this repo which is twicked for this ubuntu version
+https://github.com/Rotvie/LeGO-LOAM
+
+> cd ~/catkin_ws/src 
+> git clone  https://github.com/Rotvie/LeGO-LOAM
+> cd ..
+> catking_make -j1
+
+> sudo apt-get install libparmetis-dev
+
+
+Running the LEGO LOAM
+> source ~/catkin_ws/devel/setup.bash
+if rviz can not open error occurs:
+> sudo apt-get update
+> sudo apt-get install ros-noetic-rviz
+
+
+Playing the rosbag
+> rosbag play /home/root/docker_ws/univ_outdoor_spring_2019-04-25-14-40-25.bag --clock /morri/velodyne/velodyne_points:=/velodyne_points /mavros/imu/data:=/imu/data
+
+Running the lego loam:
+roslaunch lego_loam run.launch
+
+
+Running the Dockerfile:
+docker build -t ros-noetic-lego-loam .
+
+
+Saving pcd files:
+roslaunch lego_loam run.launch
+rosbag play ./docker_ws/univ_outdoor_spring_2019

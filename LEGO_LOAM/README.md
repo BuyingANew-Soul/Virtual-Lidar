@@ -56,7 +56,7 @@ rostopic echo -b my_rosbag.bag -p /aft_mapped_to_init > poses.csv
 ```
 #### Method 2: Using `rosbag record`
 ```bash
-rosbag record /aft_mapped_to_init /integrated_to_init -O pose_data.bag
+rosbag record /aft_mapped_to_init /integrated_to_init -O pose_with_raw_imu_data.bag
 ```
 
 ### 3. Extract Poses from a ROS Bag File
